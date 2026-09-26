@@ -76,11 +76,10 @@ required):
    stop after the first year-like one, so `The.Matrix.1999.1080p.mkv` becomes
    `The Matrix 1999`). Press Enter to search.
 2. Every result is shown in a **menu** as `Title (Year) - ttID`, plus a
-   **Search again…** item. Arrow keys or `j`/`k` move, Enter selects. If the
+    **Search again…** item. Arrow keys move, Enter selects. If the
    first search was wrong, pick **Search again…** and the input box reopens
    prefilled with your last term — no restart needed.
-3. The file is moved. `q`, Esc, or Ctrl+C at any point aborts with exit code
-   130.
+3. The file is moved. Esc or Ctrl+C at any point aborts with exit code 130.
 
 ### Non-interactive (no TTY)
 

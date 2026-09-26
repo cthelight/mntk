@@ -22,7 +22,7 @@ use thiserror::Error;
 use crate::cli::{GlobalOpts, MovieOpts, Source};
 use crate::tui;
 
-/// A user interruption (Ctrl+C, or closing the dialog with q/Esc).
+/// A user interruption (Ctrl+C or Esc).
 /// Mapped to the conventional exit code 130.
 #[derive(Debug, Error)]
 #[error("interrupted")]

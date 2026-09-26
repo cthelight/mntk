@@ -25,7 +25,7 @@ const SEARCH_AGAIN: &str = "Search again…";
 ///
 /// `search` is called with each accepted term; its errors are shown to the
 /// user, who can then retry or quit. Returns the chosen result, or `None`
-/// if the user quit (q, Esc, or Ctrl+C).
+/// if the user quit (Esc or Ctrl+C).
 pub fn session(
     file_name: &str,
     initial_term: Option<String>,
@@ -147,8 +147,6 @@ enum KeyOutcome {
 fn is_quit(code: KeyCode, modifiers: KeyModifiers) -> bool {
     matches!(code, KeyCode::Esc)
         || (matches!(code, KeyCode::Char('c')) && modifiers.contains(KeyModifiers::CONTROL))
-        // Plain q quits; ctrl+q etc. is left to the terminal.
-        || (matches!(code, KeyCode::Char('q')) && modifiers.is_empty())
 }
 
 fn handle_key(screen: &mut Screen, code: KeyCode, modifiers: KeyModifiers) -> KeyOutcome {
@@ -184,11 +182,11 @@ fn handle_key(screen: &mut Screen, code: KeyCode, modifiers: KeyModifiers) -> Ke
             _ => {}
         },
         Screen::Menu(menu) => match code {
-            KeyCode::Up | KeyCode::Char('k') => {
+            KeyCode::Up => {
                 let total = menu.results.len() + 1;
                 menu.selection = (menu.selection + total - 1) % total;
             }
-            KeyCode::Down | KeyCode::Char('j') => {
+            KeyCode::Down => {
                 let total = menu.results.len() + 1;
                 menu.selection = (menu.selection + 1) % total;
             }
@@ -259,7 +257,7 @@ fn render_input(frame: &mut Frame, file_name: &str, input: &Input) {
         frame.render_widget(Paragraph::new(status.clone()).red(), areas[3]);
     }
     frame.render_widget(
-        Paragraph::new("Enter: search    q/Esc: quit").dim(),
+        Paragraph::new("Enter: search    Esc/Ctrl+C: quit").dim(),
         areas[4],
     );
 }
@@ -302,7 +300,7 @@ fn render_menu(frame: &mut Frame, menu: &Menu) {
     frame.render_widget(Paragraph::new(lines), areas[2]);
 
     frame.render_widget(
-        Paragraph::new("↑/↓: move    Enter: select    q/Esc: quit").dim(),
+        Paragraph::new("↑/↓: move    Enter: select    Esc/Ctrl+C: quit").dim(),
         areas[3],
     );
 }
@@ -320,7 +318,7 @@ fn render_message(frame: &mut Frame, message: &Message) {
     let text = Paragraph::new(message.lines.join("\n")).wrap(Wrap { trim: true });
     frame.render_widget(text, areas[2]);
     frame.render_widget(
-        Paragraph::new("Enter: continue    q/Esc: quit").dim(),
+        Paragraph::new("Enter: continue    Esc/Ctrl+C: quit").dim(),
         areas[3],
     );
 }
