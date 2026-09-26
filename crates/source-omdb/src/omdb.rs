@@ -164,11 +164,11 @@ mod tests {
         OmdbSource::with_transport("secret", "http://omdb.example.com/", Box::new(transport))
     }
 
-    // The shape of a real `s=` response: a `Results` array (not `Search`)
-    // and lowercase `Type` values.
+    // The shape of a real free-API `s=` response: a `Search` array and
+    // lowercase `Type` values.
     const SEARCH_OK: &str = r##"
     {
-        "Results": [
+        "Search": [
             { "Title": "The Matrix", "Year": "1999", "imdbID": "tt0133093", "Type": "movie", "Poster": "https://x/1.jpg" },
             { "Title": "The Matrix Revisited", "Year": "2023", "imdbID": "tt11000618", "Type": "movie", "Poster": "https://x/2.jpg" },
             { "Title": "The Matrix", "Year": "2021", "imdbID": "tt8986062", "Type": "episode", "Poster": "https://x/3.jpg" },
@@ -223,8 +223,8 @@ mod tests {
 
     #[test]
     fn search_type_filter_is_case_insensitive() {
-        // Detail-endpoint shaped entries capitalize the type; both spellings
-        // must map to the same decision.
+        // Uses the paid-API `Results` key (alias) and capitalized type names
+        // (detail-endpoint shape); both must be accepted.
         let source = source(MockTransport::json(
             r#"{"Response": "True", "Results": [
                 { "Title": "A", "Year": "2000", "imdbID": "tt10000003", "Type": "Movie" },

@@ -17,9 +17,10 @@ pub(crate) struct SearchResponse {
     pub error: Option<String>,
     /// Present when `response` is `"True"`.
     ///
-    /// The array key on the search endpoint is `Results` (there is no
-    /// `Search` key); `totalResults` sits next to it at the root level.
-    #[serde(rename = "Results", default)]
+    /// The free API (www.omdbapi.com) names this array `Search`; the paid
+    /// API (api.omdbapi.com) names it `Results`. Both spellings are
+    /// accepted. `totalResults` sits next to it at the root level.
+    #[serde(rename = "Search", alias = "Results", default)]
     pub results: Vec<SearchEntry>,
 }
 
