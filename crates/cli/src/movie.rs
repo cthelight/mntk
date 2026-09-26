@@ -47,7 +47,7 @@ pub fn run(opts: MovieOpts, global: GlobalOpts) -> Result<()> {
     let base =
         std::env::current_dir().context("failed to determine the current working directory")?;
 
-    let result = choose_result(&*source, &opts)?;
+    let result = choose_result(&*source, &opts, embed_imdb_id)?;
     let plan = plan_rename(&opts.file, &result, embed_imdb_id);
     let target = plan.target_file(&base);
 
@@ -101,9 +101,13 @@ fn build_source(global: &GlobalOpts, config: &Config) -> Result<Box<dyn MovieSou
     }
 }
 
-fn choose_result(source: &dyn MovieSource, opts: &MovieOpts) -> Result<MovieSearchResult> {
+fn choose_result(
+    source: &dyn MovieSource,
+    opts: &MovieOpts,
+    embed_imdb_id: bool,
+) -> Result<MovieSearchResult> {
     if is_interactive() {
-        choose_interactive(source, opts)
+        choose_interactive(source, opts, embed_imdb_id)
     } else {
         choose_non_interactive(source, opts)
     }
@@ -115,43 +119,52 @@ fn is_interactive() -> bool {
     std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
 }
 
-fn choose_interactive(source: &dyn MovieSource, opts: &MovieOpts) -> Result<MovieSearchResult> {
-    let file_name = opts.file.display().to_string();
+fn choose_interactive(
+    source: &dyn MovieSource,
+    opts: &MovieOpts,
+    embed_imdb_id: bool,
+) -> Result<MovieSearchResult> {
+    let seed = term_seed(opts);
     let search = |term: &str| -> Result<Vec<MovieSearchResult>> {
         source
             .search_movies(term)
             .with_context(|| format!("search for {term:?} failed"))
     };
-    match tui::session(&file_name, initial_term(opts), search)? {
+    match tui::session(&opts.file, seed, source.name(), embed_imdb_id, search)? {
         Some(result) => Ok(result),
         None => Err(anyhow::Error::new(Interrupted)),
     }
 }
 
-/// The term to prefill the input box with: `--search` wins, `--guess`
-/// derives a term from the file name, and otherwise the box starts empty —
-/// the file name is never assumed.
-fn initial_term(opts: &MovieOpts) -> Option<String> {
+/// The search term to start with: `--search` wins, `--guess` derives a term
+/// from the file name, and otherwise the box starts empty — the file name is
+/// never assumed.
+fn term_seed(opts: &MovieOpts) -> tui::Seed {
     if let Some(search) = opts
         .search
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
     {
-        return Some(search.to_string());
+        return tui::Seed::Search(search.to_string());
     }
-    if opts.guess {
-        return derive_query(&opts.file);
+    if opts.guess
+        && let Some(query) = derive_query(&opts.file)
+    {
+        return tui::Seed::Guess(query);
     }
-    None
+    tui::Seed::Empty
 }
 
 fn choose_non_interactive(source: &dyn MovieSource, opts: &MovieOpts) -> Result<MovieSearchResult> {
-    let query = initial_term(opts).ok_or_else(|| {
-        anyhow!(
-            "no TTY detected: pass --search <TITLE>, or --guess to derive a term from the file name"
-        )
-    })?;
+    let query = term_seed(opts)
+        .term()
+        .ok_or_else(|| {
+            anyhow!(
+                "no TTY detected: pass --search <TITLE>, or --guess to derive a term from the file name"
+            )
+        })?
+        .to_string();
     let results = source.search_movies(&query)?;
     if results.is_empty() {
         bail!("no results for {query:?}");
@@ -359,32 +372,35 @@ mod tests {
     }
 
     #[test]
-    fn initial_term_is_none_without_flags() {
-        assert_eq!(initial_term(&opts(None, None)), None);
+    fn term_seed_is_empty_without_flags() {
+        assert_eq!(term_seed(&opts(None, None)), tui::Seed::Empty);
     }
 
     #[test]
-    fn initial_term_uses_the_search_flag() {
+    fn term_seed_uses_the_search_flag() {
         assert_eq!(
-            initial_term(&opts(Some("the matrix"), None)).as_deref(),
-            Some("the matrix")
+            term_seed(&opts(Some("  the matrix  "), None)),
+            tui::Seed::Search("the matrix".to_string())
         );
     }
 
     #[test]
-    fn initial_term_guesses_from_the_file_name() {
+    fn term_seed_guesses_from_the_file_name() {
         let mut opts = opts(None, None);
         opts.guess = true;
         opts.file = PathBuf::from("The.Matrix.1999.1080p.mkv");
-        assert_eq!(initial_term(&opts).as_deref(), Some("The Matrix 1999"));
+        assert_eq!(
+            term_seed(&opts),
+            tui::Seed::Guess("The Matrix 1999".to_string())
+        );
     }
 
     #[test]
-    fn initial_term_guess_is_none_when_the_file_name_is_useless() {
+    fn term_seed_guess_is_empty_when_the_file_name_is_useless() {
         let mut opts = opts(None, None);
         opts.guess = true;
         opts.file = PathBuf::from("!!!.???");
-        assert_eq!(initial_term(&opts), None);
+        assert_eq!(term_seed(&opts), tui::Seed::Empty);
     }
 
     #[test]

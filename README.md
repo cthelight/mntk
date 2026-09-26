@@ -67,19 +67,27 @@ cd ~/Downloads
 mntk movie "The.Matrix.1999.1080p.mkv"
 ```
 
-A dialog-style TUI opens, rendered in-process (no external `dialog` tool
-required):
+A dialog-style TUI opens, rendered in-process with ratatui (no external
+`dialog` tool required). Every screen is a centered dialog with a title bar
+(`1/2 search` / `2/2 pick`) and a footer of key hints:
 
 1. An **input box** for the search term. It starts empty — the file name is
    never assumed. Prefill it with `--search <TITLE>`, or pass `--guess` to
    derive a term from the file name (bracketed release tags dropped, tokens
    stop after the first year-like one, so `The.Matrix.1999.1080p.mkv` becomes
-   `The Matrix 1999`). Press Enter to search.
-2. Every result is shown in a **menu** as `Title (Year) - ttID`, plus a
-    **Search again…** item. Arrow keys move, Enter selects. If the
-   first search was wrong, pick **Search again…** and the input box reopens
-   prefilled with your last term — no restart needed.
-3. The file is moved. Esc or Ctrl+C at any point aborts with exit code 130.
+   `The Matrix 1999`); a note under the box shows where the prefill came
+   from. Edit with arrows, Home/End, Ctrl+A/E, Backspace/Delete, then press
+   Enter to search.
+2. Every result is shown in a **menu** as `Title (Year)` with the id on the
+   right, plus a **Search again…** item at the bottom. Arrow keys move,
+   `1`–`9` pick a numbered result directly, PgUp/PgDn page long lists, and
+   Enter selects. Below the list, a **rename preview** box shows exactly
+   where the file will move for the highlighted result. If the first search
+   was wrong, pick **Search again…** and the input box reopens prefilled
+   with your last term — no restart needed.
+3. A failed or empty search shows a message screen; Enter returns to the
+   input box prefilled with the same term.
+4. The file is moved. Esc or Ctrl+C at any point aborts with exit code 130.
 
 ### Non-interactive (no TTY)
 
@@ -154,7 +162,7 @@ trait. Adding TVDB/TMDB later is a new `crates/source-*` crate plus one more
 ## Development
 
 ```sh
-make test         # 70 unit tests, no network required
+make test         # 80 unit tests, no network required
 make clippy
 make fmt          # or: make fmt-check (CI-style, exits non-zero on drift)
 make check        # quick type-check without codegen
