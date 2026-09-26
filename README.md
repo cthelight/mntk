@@ -27,9 +27,7 @@ make uninstall  # removes it again
 ```
 
 `PREFIX` can be overridden: `make install PREFIX=/usr/local`
-(sudo may be required for system prefixes). `make` also provides
-`test`, `clippy`, `fmt`, `fmt-check`, `check`, and `clean` targets.
-Plain `cargo build --release` works as well.
+(sudo may be required for system prefixes).
 
 ## `mntk movie`
 
@@ -148,9 +146,11 @@ trait. Adding TVDB/TMDB later is a new `crates/source-*` crate plus one more
 ## Development
 
 ```sh
-cargo test --workspace          # 58 unit tests, no network required
-cargo clippy --workspace --all-targets
-cargo fmt
+make test         # 58 unit tests, no network required
+make clippy
+make fmt          # or: make fmt-check (CI-style, exits non-zero on drift)
+make check        # quick type-check without codegen
+make clean
 ```
 
 Tests never touch the network: the OMDB provider is tested against an
