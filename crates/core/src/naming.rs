@@ -24,7 +24,9 @@ pub fn sanitize(name: &str) -> String {
         .map(|c| if INVALID_CHARS.contains(&c) { '_' } else { c })
         .collect();
     let trimmed = replaced.trim_start();
-    let end = trimmed.trim_end_matches(|c: char| c == '.' || c.is_whitespace()).len();
+    let end = trimmed
+        .trim_end_matches(|c: char| c == '.' || c.is_whitespace())
+        .len();
     trimmed[..end].to_string()
 }
 
@@ -85,7 +87,10 @@ pub fn plan_rename(source: &Path, result: &MovieSearchResult, embed_imdb_id: boo
         Some(ext) => format!("{stem}.{ext}"),
         None => stem,
     };
-    RenamePlan { dir_name, file_name }
+    RenamePlan {
+        dir_name,
+        file_name,
+    }
 }
 
 fn base_name(title: &str, year: Option<u16>) -> String {
@@ -193,7 +198,11 @@ mod tests {
 
     #[test]
     fn plan_without_year_omits_parentheses() {
-        let plan = plan_rename(Path::new("/tmp/a.avi"), &result("Mystery", None, None), true);
+        let plan = plan_rename(
+            Path::new("/tmp/a.avi"),
+            &result("Mystery", None, None),
+            true,
+        );
         assert_eq!(plan.dir_name, "Mystery");
         assert_eq!(plan.file_name, "Mystery.avi");
     }
@@ -211,7 +220,11 @@ mod tests {
 
     #[test]
     fn plan_preserves_the_source_extension_case() {
-        let plan = plan_rename(Path::new("/tmp/a.MP4"), &result("X", Some(2000), None), false);
+        let plan = plan_rename(
+            Path::new("/tmp/a.MP4"),
+            &result("X", Some(2000), None),
+            false,
+        );
         assert_eq!(plan.file_name, "X (2000).MP4");
     }
 

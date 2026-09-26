@@ -115,7 +115,10 @@ mod tests {
     #[test]
     fn source_error_display() {
         let err = SourceError::NotFound("Invalid API key!".to_string());
-        assert_eq!(err.to_string(), "metadata source found no results: Invalid API key!");
+        assert_eq!(
+            err.to_string(),
+            "metadata source found no results: Invalid API key!"
+        );
 
         let err = SourceError::Http(404);
         assert_eq!(err.to_string(), "metadata source returned HTTP status 404");

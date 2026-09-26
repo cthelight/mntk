@@ -68,14 +68,19 @@ impl Config {
     pub fn load(explicit: Option<&Path>) -> Result<Config, ConfigError> {
         match explicit {
             Some(path) => {
-                let contents = std::fs::read_to_string(path)
-                    .map_err(|source| ConfigError::Io { path: path.to_path_buf(), source })?;
+                let contents = std::fs::read_to_string(path).map_err(|source| ConfigError::Io {
+                    path: path.to_path_buf(),
+                    source,
+                })?;
                 Self::parse(path, &contents)
             }
             None => match default_path() {
                 Some(path) if path.is_file() => {
-                    let contents = std::fs::read_to_string(&path)
-                        .map_err(|source| ConfigError::Io { path: path.clone(), source })?;
+                    let contents =
+                        std::fs::read_to_string(&path).map_err(|source| ConfigError::Io {
+                            path: path.clone(),
+                            source,
+                        })?;
                     Self::parse(&path, &contents)
                 }
                 _ => Ok(Config::default()),
@@ -84,14 +89,18 @@ impl Config {
     }
 
     fn parse(path: &Path, contents: &str) -> Result<Config, ConfigError> {
-        let raw: RawConfig = serde_yaml_ng::from_str(contents)
-            .map_err(|source| ConfigError::Parse { path: path.to_path_buf(), source })?;
+        let raw: RawConfig =
+            serde_yaml_ng::from_str(contents).map_err(|source| ConfigError::Parse {
+                path: path.to_path_buf(),
+                source,
+            })?;
         Ok(Config {
             source: nonempty(raw.source).unwrap_or_else(|| DEFAULT_SOURCE.to_string()),
             embed_imdb_id: raw.embed_imdb_id.unwrap_or(true),
             omdb: OmdbConfig {
                 api_key: nonempty(raw.omdb.api_key),
-                base_url: nonempty(raw.omdb.base_url).unwrap_or_else(|| OMDB_DEFAULT_BASE_URL.to_string()),
+                base_url: nonempty(raw.omdb.base_url)
+                    .unwrap_or_else(|| OMDB_DEFAULT_BASE_URL.to_string()),
             },
         })
     }
@@ -116,7 +125,11 @@ pub fn api_key_from_env() -> Option<String> {
 ///
 /// `env` is the value of [`api_key_from_env`], passed in by the caller so
 /// that this function stays pure.
-pub fn resolve_api_key(cli: Option<&str>, env: Option<&str>, config: Option<&str>) -> Option<String> {
+pub fn resolve_api_key(
+    cli: Option<&str>,
+    env: Option<&str>,
+    config: Option<&str>,
+) -> Option<String> {
     nonempty(cli.map(str::to_string))
         .or_else(|| nonempty(env.map(str::to_string)))
         .or_else(|| nonempty(config.map(str::to_string)))
@@ -294,7 +307,13 @@ mod tests {
         if let Some(path) = default_path() {
             let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
             assert_eq!(file_name, "config.yaml");
-            let dir_name = path.parent().unwrap().file_name().unwrap().to_string_lossy().into_owned();
+            let dir_name = path
+                .parent()
+                .unwrap()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
             assert_eq!(dir_name, "mntk");
         }
     }
