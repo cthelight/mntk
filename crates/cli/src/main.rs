@@ -1,0 +1,4 @@
+fn main() {
+    eprintln!("mntk: no commands implemented yet");
+    std::process::exit(2);
+}

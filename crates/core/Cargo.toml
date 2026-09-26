@@ -1,0 +1,7 @@
+[package]
+name = "mntk-core"
+description = "Core library for mntk: metadata source abstraction, naming rules, configuration"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

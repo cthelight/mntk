@@ -1,0 +1,7 @@
+[package]
+name = "mntk"
+description = "Media Naming Toolkit: name local media files using metadata sources"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

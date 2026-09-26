@@ -1,0 +1,8 @@
+[package]
+name = "mntk-source-omdb"
+description = "OMDB metadata source for mntk"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mntk-core.workspace = true
