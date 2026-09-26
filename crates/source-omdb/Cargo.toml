@@ -5,4 +5,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+form_urlencoded.workspace = true
 mntk-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+ureq.workspace = true
