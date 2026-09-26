@@ -20,9 +20,16 @@ a single, well-tested Rust binary. The first tool, `mntk movie`, ports
 ## Building
 
 ```sh
-cargo build --release
-# binary: target/release/mntk
+make            # debug build
+make release    # release build -> target/release/mntk
+make install    # installs to $PREFIX/bin (default: ~/.local/bin)
+make uninstall  # removes it again
 ```
+
+`PREFIX` can be overridden: `make install PREFIX=/usr/local`
+(sudo may be required for system prefixes). `make` also provides
+`test`, `clippy`, `fmt`, `fmt-check`, `check`, and `clean` targets.
+Plain `cargo build --release` works as well.
 
 ## `mntk movie`
 
