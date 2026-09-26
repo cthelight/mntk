@@ -4,6 +4,7 @@
 
 mod cli;
 mod movie;
+mod tui;
 
 use std::process::ExitCode;
 

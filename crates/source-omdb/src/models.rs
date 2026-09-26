@@ -16,8 +16,11 @@ pub(crate) struct SearchResponse {
     #[serde(rename = "Error", default)]
     pub error: Option<String>,
     /// Present when `response` is `"True"`.
-    #[serde(rename = "Search", default)]
-    pub search: Vec<SearchEntry>,
+    ///
+    /// The array key on the search endpoint is `Results` (there is no
+    /// `Search` key); `totalResults` sits next to it at the root level.
+    #[serde(rename = "Results", default)]
+    pub results: Vec<SearchEntry>,
 }
 
 /// One row of a search result.
@@ -30,7 +33,9 @@ pub(crate) struct SearchEntry {
     pub year: String,
     #[serde(rename = "imdbID")]
     pub imdb_id: String,
-    /// `"Movie"`, `"Series"` or `"Episode"`.
+    /// Lowercase `"movie"`, `"series"` or `"episode"` on the search endpoint
+    /// (the detail endpoint capitalizes the first letter), so callers must
+    /// compare case-insensitively.
     #[serde(rename = "Type")]
     pub r#type: String,
 }

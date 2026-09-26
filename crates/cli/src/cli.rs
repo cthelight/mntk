@@ -67,9 +67,19 @@ pub struct MovieOpts {
     /// The media file to rename.
     pub file: PathBuf,
 
-    /// Search term. Defaults to a term derived from the file name.
-    #[arg(long)]
+    /// Search term. In a terminal this prefills the input box (still
+    /// editable); outside a terminal it is used directly.
+    #[arg(long, conflicts_with = "guess")]
     pub search: Option<String>,
+
+    /// Guess the search term from the file name.
+    ///
+    /// Bracketed release tags are dropped and the tokens stop after the
+    /// first year-like one, so `The.Matrix.1999.1080p.mkv` becomes
+    /// `The Matrix 1999`. In a terminal this prefills the input box (still
+    /// editable); outside a terminal the guess is used directly.
+    #[arg(long)]
+    pub guess: bool,
 
     /// Pick result N (1-based) without prompting.
     #[arg(long)]
@@ -108,12 +118,37 @@ mod tests {
         );
         assert!(opts.search.is_none());
         assert!(opts.select.is_none());
+        assert!(!opts.guess);
         assert!(!opts.dry_run);
         assert!(!opts.force);
         assert!(!opts.no_imdb_id);
         assert_eq!(global.source, Source::Omdb);
         assert!(global.config.is_none());
         assert!(global.api_key.is_none());
+    }
+
+    #[test]
+    fn movie_guess_flag() {
+        let (_global, opts) = movie_cli(&["movie", "The.Matrix.1999.1080p.mkv", "--guess"]);
+
+        assert!(opts.guess);
+        assert!(opts.search.is_none());
+    }
+
+    #[test]
+    fn movie_search_and_guess_conflict() {
+        let result = Cli::try_parse_from([
+            "mntk",
+            "movie",
+            "m.mkv",
+            "--search",
+            "the matrix",
+            "--guess",
+        ]);
+        assert!(
+            result.is_err(),
+            "--search and --guess must be mutually exclusive"
+        );
     }
 
     #[test]

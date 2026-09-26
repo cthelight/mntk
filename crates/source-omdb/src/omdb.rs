@@ -70,11 +70,13 @@ impl MovieSource for OmdbSource {
         }
 
         Ok(parsed
-            .search
+            .results
             .into_iter()
             // mntk's movie tool only wants movies; OMDB mixes in series and
-            // episodes for the same title.
-            .filter(|entry| entry.r#type == "Movie")
+            // episodes for the same title. The search endpoint reports
+            // lowercase type names; the comparison is case-insensitive so a
+            // detail-endpoint shaped response ("Movie") works too.
+            .filter(|entry| entry.r#type.eq_ignore_ascii_case("movie"))
             .map(|entry| MovieSearchResult {
                 id: SourceId::new(entry.imdb_id.clone()),
                 imdb_id: Some(entry.imdb_id),
@@ -162,14 +164,16 @@ mod tests {
         OmdbSource::with_transport("secret", "http://omdb.example.com/", Box::new(transport))
     }
 
+    // The shape of a real `s=` response: a `Results` array (not `Search`)
+    // and lowercase `Type` values.
     const SEARCH_OK: &str = r##"
     {
-        "Search": [
-            { "Title": "The Matrix", "Year": "1999", "imdbID": "tt0133093", "Type": "Movie", "Poster": "https://x/1.jpg" },
-            { "Title": "The Matrix Revisited", "Year": "2023", "imdbID": "tt11000618", "Type": "Movie", "Poster": "https://x/2.jpg" },
-            { "Title": "The Matrix", "Year": "2021", "imdbID": "tt8986062", "Type": "Episode", "Poster": "https://x/3.jpg" },
-            { "Title": "The Matrix", "Year": "1999", "imdbID": "tt10000001", "Type": "Series", "Poster": "https://x/4.jpg" },
-            { "Title": "The Matrix: Unknown Year", "Year": "N/A", "imdbID": "tt10000002", "Type": "Movie", "Poster": "https://x/5.jpg" }
+        "Results": [
+            { "Title": "The Matrix", "Year": "1999", "imdbID": "tt0133093", "Type": "movie", "Poster": "https://x/1.jpg" },
+            { "Title": "The Matrix Revisited", "Year": "2023", "imdbID": "tt11000618", "Type": "movie", "Poster": "https://x/2.jpg" },
+            { "Title": "The Matrix", "Year": "2021", "imdbID": "tt8986062", "Type": "episode", "Poster": "https://x/3.jpg" },
+            { "Title": "The Matrix", "Year": "1999", "imdbID": "tt10000001", "Type": "series", "Poster": "https://x/4.jpg" },
+            { "Title": "The Matrix: Unknown Year", "Year": "N/A", "imdbID": "tt10000002", "Type": "movie", "Poster": "https://x/5.jpg" }
         ],
         "totalResults": "5",
         "Response": "True"
@@ -215,6 +219,21 @@ mod tests {
             mock.last_url().as_deref(),
             Some("http://omdb.example.com/?apikey=secret&s=The+Matrix+%26+The+City")
         );
+    }
+
+    #[test]
+    fn search_type_filter_is_case_insensitive() {
+        // Detail-endpoint shaped entries capitalize the type; both spellings
+        // must map to the same decision.
+        let source = source(MockTransport::json(
+            r#"{"Response": "True", "Results": [
+                { "Title": "A", "Year": "2000", "imdbID": "tt10000003", "Type": "Movie" },
+                { "Title": "B", "Year": "2000", "imdbID": "tt10000004", "Type": "Series" }
+            ]}"#,
+        ));
+        let results = source.search_movies("a").unwrap();
+        assert_eq!(results.len(), 1, "{results:?}");
+        assert_eq!(results[0].id.as_str(), "tt10000003");
     }
 
     #[test]

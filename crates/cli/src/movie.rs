@@ -1,18 +1,18 @@
 //! The `mntk movie` command.
 //!
 //! Searches a metadata source for the movie a file belongs to, then moves
-//! the file to `<Title (Year)>/<Title (Year) [imdbid-ttXXXXXXX]>.<ext>`
+//! the file to `<Title (Year)>/<Title (Year) [imdbid-ttXXXXXXX].<ext>`
 //! under the current working directory.
 //!
-//! Interactive sessions get a re-entrant dialog: pick a result or ask for
-//! another search. Non-interactive sessions (no TTY) require `--search`
-//! and never loop.
+//! Interactive sessions get a dialog-style TUI: an input box for the search
+//! term (never assumed from the file name unless `--guess` is passed), then
+//! a menu of results. Non-interactive sessions (no TTY) require a search
+//! term and never loop.
 
 use std::io::{ErrorKind, IsTerminal};
 use std::path::Path;
 
 use anyhow::{Context, Result, anyhow, bail};
-use dialoguer::{Input, Select};
 use mntk_core::config::{self, Config};
 use mntk_core::naming::plan_rename;
 use mntk_core::source::{MovieSearchResult, MovieSource};
@@ -20,8 +20,10 @@ use mntk_source_omdb::OmdbSource;
 use thiserror::Error;
 
 use crate::cli::{GlobalOpts, MovieOpts, Source};
+use crate::tui;
 
-/// A user interruption (Ctrl+C). Mapped to the conventional exit code 130.
+/// A user interruption (Ctrl+C, or closing the dialog with q/Esc).
+/// Mapped to the conventional exit code 130.
 #[derive(Debug, Error)]
 #[error("interrupted")]
 pub struct Interrupted;
@@ -100,56 +102,57 @@ fn build_source(global: &GlobalOpts, config: &Config) -> Result<Box<dyn MovieSou
 }
 
 fn choose_result(source: &dyn MovieSource, opts: &MovieOpts) -> Result<MovieSearchResult> {
-    if std::io::stdin().is_terminal() {
+    if is_interactive() {
         choose_interactive(source, opts)
     } else {
         choose_non_interactive(source, opts)
     }
 }
 
-fn choose_interactive(source: &dyn MovieSource, opts: &MovieOpts) -> Result<MovieSearchResult> {
-    let mut query = opts
-        .search
-        .clone()
-        .map(|search| search.trim().to_string())
-        .filter(|search| !search.is_empty())
-        .or_else(|| derive_query(&opts.file))
-        .unwrap_or_default();
+/// A TTY on both ends is required: the TUI reads keys from stdin and draws
+/// to stdout.
+fn is_interactive() -> bool {
+    std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
+}
 
-    loop {
-        let results = if query.is_empty() {
-            query = ask_term(None)?;
-            source.search_movies(&query)?
-        } else {
-            source.search_movies(&query)?
-        };
-        if results.is_empty() {
-            println!("no results for {query:?}.");
-            query = ask_term(Some(query.clone()))?;
-            continue;
-        }
-        match pick_from_menu(&results)? {
-            Some(index) => {
-                return Ok(results
-                    .into_iter()
-                    .nth(index)
-                    .expect("menu index is in range"));
-            }
-            None => query = ask_term(Some(query.clone()))?,
-        }
+fn choose_interactive(source: &dyn MovieSource, opts: &MovieOpts) -> Result<MovieSearchResult> {
+    let file_name = opts.file.display().to_string();
+    let search = |term: &str| -> Result<Vec<MovieSearchResult>> {
+        source
+            .search_movies(term)
+            .with_context(|| format!("search for {term:?} failed"))
+    };
+    match tui::session(&file_name, initial_term(opts), search)? {
+        Some(result) => Ok(result),
+        None => Err(anyhow::Error::new(Interrupted)),
     }
 }
 
-fn choose_non_interactive(source: &dyn MovieSource, opts: &MovieOpts) -> Result<MovieSearchResult> {
-    let query = opts
+/// The term to prefill the input box with: `--search` wins, `--guess`
+/// derives a term from the file name, and otherwise the box starts empty —
+/// the file name is never assumed.
+fn initial_term(opts: &MovieOpts) -> Option<String> {
+    if let Some(search) = opts
         .search
         .as_deref()
         .map(str::trim)
-        .filter(|query| !query.is_empty())
-        .ok_or_else(|| {
-            anyhow!("no TTY detected: pass --search <TITLE> to search non-interactively")
-        })?;
-    let results = source.search_movies(query)?;
+        .filter(|s| !s.is_empty())
+    {
+        return Some(search.to_string());
+    }
+    if opts.guess {
+        return derive_query(&opts.file);
+    }
+    None
+}
+
+fn choose_non_interactive(source: &dyn MovieSource, opts: &MovieOpts) -> Result<MovieSearchResult> {
+    let query = initial_term(opts).ok_or_else(|| {
+        anyhow!(
+            "no TTY detected: pass --search <TITLE>, or --guess to derive a term from the file name"
+        )
+    })?;
+    let results = source.search_movies(&query)?;
     if results.is_empty() {
         bail!("no results for {query:?}");
     }
@@ -174,52 +177,9 @@ fn choose_non_interactive(source: &dyn MovieSource, opts: &MovieOpts) -> Result<
         results.len()
     );
     for (index, result) in results.iter().enumerate() {
-        message.push_str(&format!("\n  {}. {}", index + 1, label(result)));
+        message.push_str(&format!("\n  {}. {}", index + 1, tui::label(result)));
     }
     bail!("{message}")
-}
-
-fn ask_term(default: Option<String>) -> Result<String> {
-    let prompt = Input::<String>::new().with_prompt("Search term");
-    let prompt = match default {
-        Some(default) => prompt.default(default),
-        None => prompt,
-    };
-    prompt.interact_text().map_err(dialog_error)
-}
-
-/// `Some(index)` for a chosen result, `None` for "search again".
-fn pick_from_menu(results: &[MovieSearchResult]) -> Result<Option<usize>> {
-    let mut labels: Vec<String> = results.iter().map(label).collect();
-    labels.push("Search again…".to_string());
-    match Select::new()
-        .with_prompt("Select the movie")
-        .items(&labels)
-        .default(0)
-        .interact_opt()
-    {
-        Ok(None) => Err(anyhow::Error::new(Interrupted)),
-        Ok(Some(index)) if index < results.len() => Ok(Some(index)),
-        Ok(Some(_)) => Ok(None),
-        Err(error) => Err(dialog_error(error)),
-    }
-}
-
-fn label(result: &MovieSearchResult) -> String {
-    let year = match result.year {
-        Some(year) => year.to_string(),
-        None => "N/A".to_string(),
-    };
-    format!("{} ({year}) - {}", result.title, result.id)
-}
-
-fn dialog_error(error: dialoguer::Error) -> anyhow::Error {
-    match &error {
-        dialoguer::Error::IO(io) if io.kind() == ErrorKind::Interrupted => {
-            anyhow::Error::new(Interrupted)
-        }
-        _ => error.into(),
-    }
 }
 
 /// Moves `from` to `to`, creating the destination directory.
@@ -294,6 +254,23 @@ mod tests {
         }
     }
 
+    /// A stub that records the query it was asked for.
+    struct RecordingSource {
+        results: Vec<MovieSearchResult>,
+        last_query: std::cell::RefCell<Option<String>>,
+    }
+
+    impl MovieSource for RecordingSource {
+        fn name(&self) -> &'static str {
+            "recording"
+        }
+
+        fn search_movies(&self, query: &str) -> Result<Vec<MovieSearchResult>, SourceError> {
+            *self.last_query.borrow_mut() = Some(query.to_string());
+            Ok(self.results.clone())
+        }
+    }
+
     fn result(title: &str, id: &str, year: Option<u16>) -> MovieSearchResult {
         MovieSearchResult {
             id: SourceId::new(id),
@@ -308,6 +285,7 @@ mod tests {
             file: PathBuf::from("movie.mkv"),
             search: search.map(str::to_string),
             select,
+            guess: false,
             dry_run: false,
             force: false,
             no_imdb_id: false,
@@ -338,15 +316,6 @@ mod tests {
     }
 
     #[test]
-    fn label_shows_title_year_and_id() {
-        let formatted = label(&result("The Matrix", "tt0133093", Some(1999)));
-        assert_eq!(formatted, "The Matrix (1999) - tt0133093");
-
-        let formatted = label(&result("Mystery", "tt0000001", None));
-        assert_eq!(formatted, "Mystery (N/A) - tt0000001");
-    }
-
-    #[test]
     fn move_file_creates_the_destination_directory() {
         let dir = std::env::temp_dir().join(format!("mntk-move-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -365,7 +334,57 @@ mod tests {
     fn non_interactive_requires_a_search_term() {
         let source = StubSource(vec![]);
         let error = choose_non_interactive(&source, &opts(None, None)).unwrap_err();
-        assert!(error.to_string().contains("no TTY detected"), "{error}");
+        let message = error.to_string();
+        assert!(message.contains("no TTY detected"), "{message}");
+        assert!(message.contains("--search"), "{message}");
+        assert!(message.contains("--guess"), "{message}");
+    }
+
+    #[test]
+    fn non_interactive_guess_sends_the_derived_term() {
+        let source = RecordingSource {
+            results: vec![result("The Matrix", "tt0133093", Some(1999))],
+            last_query: std::cell::RefCell::new(None),
+        };
+        let mut opts = opts(None, None);
+        opts.guess = true;
+        opts.file = PathBuf::from("The.Matrix.1999.1080p.mkv");
+
+        let chosen = choose_non_interactive(&source, &opts).unwrap();
+        assert_eq!(chosen.id.as_str(), "tt0133093");
+        assert_eq!(
+            source.last_query.borrow().as_deref(),
+            Some("The Matrix 1999")
+        );
+    }
+
+    #[test]
+    fn initial_term_is_none_without_flags() {
+        assert_eq!(initial_term(&opts(None, None)), None);
+    }
+
+    #[test]
+    fn initial_term_uses_the_search_flag() {
+        assert_eq!(
+            initial_term(&opts(Some("the matrix"), None)).as_deref(),
+            Some("the matrix")
+        );
+    }
+
+    #[test]
+    fn initial_term_guesses_from_the_file_name() {
+        let mut opts = opts(None, None);
+        opts.guess = true;
+        opts.file = PathBuf::from("The.Matrix.1999.1080p.mkv");
+        assert_eq!(initial_term(&opts).as_deref(), Some("The Matrix 1999"));
+    }
+
+    #[test]
+    fn initial_term_guess_is_none_when_the_file_name_is_useless() {
+        let mut opts = opts(None, None);
+        opts.guess = true;
+        opts.file = PathBuf::from("!!!.???");
+        assert_eq!(initial_term(&opts), None);
     }
 
     #[test]
