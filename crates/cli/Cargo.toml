@@ -7,3 +7,7 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+dialoguer.workspace = true
+mntk-core.workspace = true
+mntk-source-omdb.workspace = true
+thiserror.workspace = true

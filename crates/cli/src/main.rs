@@ -1,20 +1,22 @@
 //! mntk: Media Naming Toolkit.
 //!
-//! Composition root: parses arguments, resolves configuration, builds the
-//! requested source, and dispatches to the command.
+//! Composition root: parses arguments, then dispatches to the command.
 
 mod cli;
+mod movie;
 
 use std::process::ExitCode;
 
-use anyhow::bail;
 use clap::Parser;
 
 use crate::cli::{Cli, Command};
+use crate::movie::Interrupted;
 
 fn main() -> ExitCode {
     match run(Cli::parse()) {
         Ok(()) => ExitCode::SUCCESS,
+        // Ctrl+C gets the conventional shell exit code (128 + SIGINT).
+        Err(error) if error.is::<Interrupted>() => ExitCode::from(130),
         Err(error) => {
             eprintln!("mntk: {error}");
             ExitCode::FAILURE
@@ -24,7 +26,7 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
-        Command::Movie(_) => bail!("`mntk movie` is not implemented yet"),
+        Command::Movie(opts) => movie::run(opts, cli.global),
     }
 }
 
@@ -33,11 +35,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn movie_command_is_not_implemented_yet() {
-        let cli = Cli::parse_from(["mntk", "movie", "movie.mkv"]);
-        match run(cli) {
-            Err(error) => assert!(error.to_string().contains("not implemented")),
-            Ok(()) => panic!("expected an error"),
-        }
+    fn movie_missing_file_is_an_error() {
+        let cli = Cli::parse_from(["mntk", "movie", "/nonexistent/nope.mkv"]);
+        let error = run(cli).expect_err("missing file must fail");
+        assert!(error.to_string().contains("file not found"), "{error}");
+    }
+
+    #[test]
+    fn interrupted_maps_to_exit_code_130() {
+        let error = anyhow::Error::new(Interrupted);
+        assert!(error.is::<Interrupted>());
     }
 }

@@ -29,6 +29,14 @@ pub enum Source {
     Omdb,
 }
 
+impl Source {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Source::Omdb => "omdb",
+        }
+    }
+}
+
 /// Options accepted at every level (global or per-subcommand).
 #[derive(Debug, Clone, Args)]
 pub struct GlobalOpts {
